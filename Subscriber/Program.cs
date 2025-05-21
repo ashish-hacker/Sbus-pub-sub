@@ -94,7 +94,8 @@ ServiceBusSessionProcessor processor = client.CreateSessionProcessor(
     topicName, subscriptionName,
     new ServiceBusSessionProcessorOptions
     {
-        MaxConcurrentSessions = 5,
+        SessionIds = {"user-008", "user-009"},
+        MaxConcurrentSessions = 10,
         AutoCompleteMessages = false
     });
 
