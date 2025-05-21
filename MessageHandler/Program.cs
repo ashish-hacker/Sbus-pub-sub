@@ -37,10 +37,15 @@ bool exists = await subscriptions.ExistsAsync(subscriptionName);
 if (!exists)
 {
     Console.WriteLine($"🔧 Creating subscription '{subscriptionName}'...");
+    var subscriptionData = new ServiceBusSubscriptionData
+    {
+        RequiresSession = true
+    };
+
     await subscriptions.CreateOrUpdateAsync(
         WaitUntil.Completed,
         subscriptionName,
-        new ServiceBusSubscriptionData());
+        subscriptionData);
 }
 else
 {
@@ -77,13 +82,21 @@ else
 
 // Start listening
 await using var client = new ServiceBusClient(connectionString);
-ServiceBusProcessor processor = client.CreateProcessor(topicName, subscriptionName, new ServiceBusProcessorOptions());
+ServiceBusSessionProcessor processor = client.CreateSessionProcessor(
+    topicName, subscriptionName,
+    new ServiceBusSessionProcessorOptions
+    {
+        MaxConcurrentSessions = 5,
+        AutoCompleteMessages = false
+    });
 
 processor.ProcessMessageAsync += async args =>
 {
     var message = args.Message;
     string body = message.Body.ToString();
+    string sessionId = args.Message.SessionId;
 
+    Console.WriteLine($"🛠️ Processing from {sessionId}: {body}");
     Console.ForegroundColor = ConsoleColor.Yellow;
     Console.WriteLine("📥 [MessageHandler] Received filtered message:");
     Console.ResetColor();
@@ -99,11 +112,12 @@ processor.ProcessMessageAsync += async args =>
 
     // Process and respond to event topic
     var responseBody = $"{{\"status\":\"processed\",\"original\":{body}}}";
-    var responseMessage = new ServiceBusMessage(responseBody)
+    var responseMessage = new ServiceBusMessage($"Response to {sessionId}")
     {
+        SessionId = sessionId,
+        CorrelationId = args.Message.CorrelationId,
         ContentType = "application/json"
     };
-
     responseMessage.ApplicationProperties["operation"] = "avsInsights";
     responseMessage.ApplicationProperties["operationResource"] = "MessageHandler";
 

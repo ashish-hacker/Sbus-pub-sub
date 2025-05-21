@@ -41,10 +41,15 @@ if (!exists)
     Console.WriteLine($"🔧 Creating subscription '{subscriptionName}'...");
     Console.ResetColor();
 
+    var subscriptionData = new ServiceBusSubscriptionData
+    {
+        RequiresSession = true
+    };
+
     await subscriptions.CreateOrUpdateAsync(
         WaitUntil.Completed,
         subscriptionName,
-        new ServiceBusSubscriptionData());
+        subscriptionData);
 }
 else
 {
@@ -85,15 +90,24 @@ else
 
 // Start listening to messages
 await using var client = new ServiceBusClient(connectionString);
-ServiceBusProcessor processor = client.CreateProcessor(topicName, subscriptionName, new ServiceBusProcessorOptions());
+ServiceBusSessionProcessor processor = client.CreateSessionProcessor(
+    topicName, subscriptionName,
+    new ServiceBusSessionProcessorOptions
+    {
+        SessionIds = {"user-008", "user-009"},
+        MaxConcurrentSessions = 10,
+        AutoCompleteMessages = false
+    });
 
 processor.ProcessMessageAsync += async args =>
 {
+    string sessionId = args.Message.SessionId;
+    string body = args.Message.Body.ToString();
+
     Console.ForegroundColor = ConsoleColor.Cyan;
     Console.WriteLine("📨 New message received:");
     Console.ResetColor();
 
-    string body = args.Message.Body.ToString();
     Console.WriteLine("─────────────────────────────────────");
     Console.WriteLine($"📦 Body: {body}");
 
@@ -104,6 +118,7 @@ processor.ProcessMessageAsync += async args =>
 
     Console.WriteLine("─────────────────────────────────────");
 
+    Console.WriteLine($"📥 Response for {sessionId}: {body}");
     await args.CompleteMessageAsync(args.Message);
 };
 
